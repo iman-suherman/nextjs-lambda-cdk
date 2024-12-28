@@ -4,10 +4,10 @@ This project demonstrates how to deploy a Next.js application to AWS Lambda usin
 
 ## Prerequisites
 
-### Required Software
+### Minimum Required Software
 
-- Node.js 18.12.0 (recommended)
-- npm 6.14.18 (recommended)
+- Node.js 18.12.0
+- npm 6.14.18
 - AWS CLI v2
 - AWS CDK v2
 - TypeScript

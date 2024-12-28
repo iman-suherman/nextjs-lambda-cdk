@@ -1,11 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  poweredByHeader: false,
-  webpack: (config) => {
-    // Add any webpack configurations if needed
-    return config
+  output: 'standalone',
+  assetPrefix: '',
+  compress: false,
+  images: {
+    unoptimized: true,
+  },
+  // Ensure experimental features are enabled
+  experimental: {
+    // Enable if you're using app directory
+    appDir: false,
   }
 }
 

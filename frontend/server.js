@@ -1,106 +1,175 @@
+const { createServer } = require('http')
+const { parse } = require('url')
 const next = require('next')
-const path = require('path')
-const { ServerResponse, IncomingMessage } = require('http')
+const { Writable } = require('stream')
+const { EventEmitter } = require('events')
+const http = require('http')
 
-const app = next({
-  dev: false,
-  dir: path.join(__dirname),
-  conf: require('./next.config.js')
+// Global error handler
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled Rejection:', error)
 })
 
-const handle = app.getRequestHandler()
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error)
+})
 
-let isAppPrepared = false
+const dev = process.env.NODE_ENV !== 'production'
+console.log('Environment:', {
+  dev,
+  nodeEnv: process.env.NODE_ENV,
+  region: process.env.AWS_REGION
+})
 
-exports.handler = async (event, context) => {
-  try {
-    if (!isAppPrepared) {
-      await app.prepare()
-      isAppPrepared = true
+let app
+try {
+  app = next({ 
+    dev,
+    conf: {
+      output: 'standalone',
+      assetPrefix: '/_next',
+      compress: false,
+      images: {
+        unoptimized: true,
+      },
+      experimental: {
+        appDir: false,
+      }
     }
+  })
+  console.log('Next.js app created')
+} catch (error) {
+  console.error('Failed to create Next.js app:', error)
+  throw error
+}
 
-    const { httpMethod, path: pathname, headers, queryStringParameters, body, isBase64Encoded } = event
-    
-    // Construct URL
-    const url = pathname + (queryStringParameters ? '?' + new URLSearchParams(queryStringParameters).toString() : '')
+let handle
+try {
+  handle = app.getRequestHandler()
+  console.log('Got request handler')
+} catch (error) {
+  console.error('Failed to get request handler:', error)
+  throw error
+}
 
-    return new Promise((resolve, reject) => {
-      // Create mock request object using http.IncomingMessage
-      const req = Object.assign(new IncomingMessage(), {
-        method: httpMethod,
-        url,
-        headers: headers || {},
-        body: body ? (isBase64Encoded ? Buffer.from(body, 'base64').toString() : body) : undefined
-      })
+class ServerResponse extends http.ServerResponse {
+  constructor(req) {
+    super(req)
+    this._body = ''
+    this.req = req
+  }
 
-      // Create mock response object using http.ServerResponse
-      const res = Object.assign(new ServerResponse(req), {
-        finished: false,
-        _body: '',
-        end: function(chunk) {
-          ServerResponse.prototype.end.call(this, chunk)
-          resolve({
-            statusCode: this.statusCode,
-            headers: this.getHeaders(),
-            body: this._body || chunk || '',
-            isBase64Encoded: false
-          })
-        },
-        write: function(chunk) {
-          this._body = this._body || ''
-          this._body += chunk.toString('utf8')
-        }
-      })
+  write(chunk, encoding) {
+    if (chunk) {
+      this._body += chunk.toString(encoding)
+    }
+    return true
+  }
 
-      // Add required methods for Next.js compatibility
-      res.send = function(body) {
-        if (typeof body === 'string') {
-          this.setHeader('Content-Type', 'text/html')
-          this.end(body)
-        } else if (Buffer.isBuffer(body)) {
-          this.setHeader('Content-Type', 'application/octet-stream')
-          this.end(body)
-        } else {
-          this.setHeader('Content-Type', 'application/json')
-          this.end(JSON.stringify(body))
-        }
-      }
+  end(chunk, encoding) {
+    if (chunk) {
+      this.write(chunk, encoding)
+    }
+    this.emit('finish')
+    return this
+  }
+}
 
-      res.json = function(obj) {
-        this.setHeader('Content-Type', 'application/json')
-        this.end(JSON.stringify(obj))
-      }
-
-      res.status = function(code) {
-        this.statusCode = code
-        return this
-      }
-
-      res.redirect = function(status, url) {
-        if (typeof url === 'undefined') {
-          url = status
-          status = 302
-        }
-        this.statusCode = status
-        this.setHeader('Location', url)
-        this.end()
-      }
-
-      // Handle the request
-      handle(req, res).catch(reject)
+class ServerRequest extends http.IncomingMessage {
+  constructor(event) {
+    super({
+      encrypted: true,
+      readable: true,
+      remoteAddress: event.requestContext?.identity?.sourceIp || '127.0.0.1',
+      address: () => ({ port: 443 }),
+      end: () => {},
+      destroy: () => {}
     })
 
+    this.method = event.httpMethod
+    this.url = event.path + (event.queryStringParameters ? 
+      '?' + new URLSearchParams(event.queryStringParameters).toString() : '')
+    this.headers = {
+      ...event.headers,
+      'x-forwarded-proto': 'https',
+      host: event.requestContext?.domainName || event.headers?.Host
+    }
+  }
+}
+
+exports.handler = async (event, context) => {
+  console.log('Handler started:', { 
+    path: event.path,
+    method: event.httpMethod,
+    headers: event.headers 
+  })
+
+  try {
+    await app.prepare()
+    console.log('App prepared')
+
+    const response = await new Promise((resolve, reject) => {
+      const req = new ServerRequest(event)
+      const res = new ServerResponse(req)
+
+      res.on('finish', () => {
+        console.log('Response finished:', {
+          statusCode: res.statusCode,
+          hasBody: !!res._body,
+          bodyLength: res._body.length
+        })
+        
+        resolve({
+          statusCode: res.statusCode || 200,
+          headers: {
+            ...res.getHeaders(),
+            'Content-Type': res.getHeader('content-type') || 'text/html',
+            'Access-Control-Allow-Origin': '*'
+          },
+          body: res._body
+        })
+      })
+
+      res.on('error', (error) => {
+        console.error('Response error:', error)
+        reject(error)
+      })
+
+      try {
+        handle(req, res)
+      } catch (error) {
+        console.error('Handler error:', error)
+        reject(error)
+      }
+    })
+
+    console.log('Returning response:', {
+      statusCode: response.statusCode,
+      hasBody: !!response.body,
+      bodyLength: response.body?.length
+    })
+
+    return response
+
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Top level error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
+
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
       body: JSON.stringify({
-        error: 'Internal Server Error',
-        details: error.message,
+        error: true,
+        message: error.message,
+        name: error.name,
         stack: error.stack
-      }),
-      isBase64Encoded: false
+      })
     }
   }
 } 
