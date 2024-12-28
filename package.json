@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "deploy": "node deploy.js"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.115.0",
+    "cdk": "^2.173.3",
+    "constructs": "^10.0.0",
+    "typescript": "~5.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "ts-node": "^10.9.1"
+  }
+}
