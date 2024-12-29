@@ -53,7 +53,7 @@ ls -la .lambda-package/.next
 # Install production dependencies
 echo "📦 Installing production dependencies..."
 cd .lambda-package
-npm install --production --no-audit --no-fund --no-optional
+npm install --omit=dev --no-audit --no-fund --omit=optional
 
 # Clean up unnecessary files
 echo "🧹 Cleaning up..."

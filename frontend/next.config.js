@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  assetPrefix: '',
+  assetPrefix: '_next',
   compress: false,
   images: {
     unoptimized: true,

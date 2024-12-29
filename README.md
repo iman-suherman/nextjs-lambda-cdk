@@ -1,6 +1,23 @@
 # Serverless Next.js with AWS CDK
 
-This project demonstrates how to deploy a Next.js application to AWS Lambda using CDK, creating a fully serverless web application.
+This project demonstrates how to deploy a Next.js application using AWS Lambda for server-side rendering and S3 for static asset delivery, creating a high-performance serverless web application.
+
+## Architecture
+
+### Components
+
+- **AWS Lambda**: Handles server-side rendering of Next.js pages
+- **S3 Bucket**: Serves static assets (JS, CSS, images) for faster delivery
+- **API Gateway**: Routes requests between Lambda and clients
+- **CDK**: Manages infrastructure as code
+
+### Request Flow
+
+1. Client requests a page
+2. API Gateway routes the request to Lambda
+3. Lambda renders the HTML using Next.js
+4. Static assets (/_next/*) are served directly from S3
+5. Client receives fast HTML and loads assets from S3
 
 ## Prerequisites
 
@@ -11,6 +28,67 @@ This project demonstrates how to deploy a Next.js application to AWS Lambda usin
 - AWS CLI v2
 - AWS CDK v2
 - TypeScript
+
+## Local Development
+
+To run the Next.js application locally:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The application will be available at <http://localhost:3000>
+
+## Deployment
+
+### 1. Build the Next.js application
+
+```bash
+cd frontend
+npm run build
+```
+
+### 2. Package for Lambda
+
+```bash
+./prepare-lambda.sh
+```
+
+### 3. Deploy to AWS
+
+```bash
+./deploy.sh
+```
+
+This will:
+
+1. Create an S3 bucket for static assets
+2. Deploy the Next.js static files to S3
+3. Create a Lambda function for server-side rendering
+4. Set up API Gateway for routing
+
+## Architecture Benefits
+
+### Performance
+
+- Static assets served directly from S3
+- Reduced Lambda cold starts
+- Faster page loads
+- Better caching
+
+### Cost
+
+- Reduced Lambda execution time
+- Pay only for actual server-side rendering
+- Cost-effective static file serving
+
+### Scalability
+
+- Automatic scaling with Lambda
+- S3 handles high traffic for static assets
+- No server management required
 
 ## AWS Profile Setup
 
@@ -122,22 +200,6 @@ To remove AWS credentials:
 
 ```bash
 rm -rf ~/.aws
-```
-
-## Deployment
-
-### Quick Deployment
-
-Before deploying, run the preparation script:
-
-```bash
-./prepare-lambda.sh
-```
-
-Then deploy using the provided script:
-
-```bash
-./deploy.sh
 ```
 
 ## Author

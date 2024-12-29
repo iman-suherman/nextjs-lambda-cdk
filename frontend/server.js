@@ -32,7 +32,7 @@ try {
     dev,
     conf: {
       output: 'standalone',
-      assetPrefix: '/_next',
+      assetPrefix: '',
       compress: false,
       images: {
         unoptimized: true,
@@ -102,7 +102,7 @@ class ServerRequest extends http.IncomingMessage {
   }
 }
 
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   console.log('Handler started:', { 
     path: event.path,
     method: event.httpMethod,
