@@ -1,12 +1,40 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as path from 'path';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class NextjsLambdaCdkStack extends cdk.Stack {
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // Create S3 bucket for static files with public access
+    const staticBucket = new s3.Bucket(this, 'StaticBucket', {
+      publicReadAccess: true,
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicAcls: false,
+        blockPublicPolicy: false,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: false
+      }),
+      cors: [
+        {
+          allowedMethods: [s3.HttpMethods.GET],
+          allowedOrigins: ['*'],
+          allowedHeaders: ['*'],
+          exposedHeaders: ['ETag'],
+        },
+      ],
+    });
+
+    // Deploy _next directory to S3
+    new s3deploy.BucketDeployment(this, 'StaticDeployment', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../.lambda-package/.next'))],
+      destinationBucket: staticBucket,
+      destinationKeyPrefix: '_next',
+    });
 
     // Create Lambda Function
     const handler = new lambda.Function(this, 'NextJSHandler', {
@@ -17,6 +45,7 @@ export class NextjsLambdaCdkStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(30),
       environment: {
         NODE_ENV: 'production',
+        STATIC_BUCKET_NAME: staticBucket.bucketName,
       }
     });
 
@@ -29,37 +58,31 @@ export class NextjsLambdaCdkStack extends cdk.Stack {
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: ['*'],
       },
-      endpointConfiguration: {
-        types: [apigateway.EndpointType.REGIONAL]
-      }
     });
 
     // Create Lambda integration
-    const integration = new apigateway.LambdaIntegration(handler, {
+    const lambdaIntegration = new apigateway.LambdaIntegration(handler, {
       proxy: true,
-      allowTestInvoke: true,
     });
 
-    // Add root method
-    api.root.addMethod('ANY', integration, {
-      authorizationType: apigateway.AuthorizationType.NONE,
-    });
-
-    // Add catch-all proxy
-    const proxy = api.root.addProxy({
-      defaultIntegration: integration,
+    // Add catch-all proxy for all routes
+    api.root.addMethod('ANY', lambdaIntegration);
+    api.root.addProxy({
+      defaultIntegration: lambdaIntegration,
+      anyMethod: true,
       defaultMethodOptions: {
         authorizationType: apigateway.AuthorizationType.NONE,
       },
-      anyMethod: true,
     });
-
-    // Grant invoke permissions
-    handler.grantInvoke(new iam.ServicePrincipal('apigateway.amazonaws.com'));
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
       description: 'API Gateway endpoint URL',
+    });
+
+    new cdk.CfnOutput(this, 'StaticBucketName', {
+      value: staticBucket.bucketName,
+      description: 'Static files bucket name',
     });
   }
 } 

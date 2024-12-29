@@ -15,10 +15,15 @@ process.on('uncaughtException', (error) => {
 })
 
 const dev = process.env.NODE_ENV !== 'production'
+const STATIC_BUCKET_NAME = process.env.STATIC_BUCKET_NAME
+const S3_DOMAIN = `https://${STATIC_BUCKET_NAME}.s3.ap-southeast-3.amazonaws.com`
+
 console.log('Environment:', {
   dev,
   nodeEnv: process.env.NODE_ENV,
-  region: process.env.AWS_REGION
+  region: process.env.AWS_REGION,
+  staticBucket: STATIC_BUCKET_NAME,
+  s3Domain: S3_DOMAIN
 })
 
 let app
@@ -143,9 +148,16 @@ exports.handler = async (event, context) => {
       }
     })
 
+    // Global replacement for all /_next occurrences
+    response.body = response.body.replace(
+      /\/_next\//g,
+      `${S3_DOMAIN}/_next/`
+    );
+
     console.log('Returning response:', {
       statusCode: response.statusCode,
       hasBody: !!response.body,
+      body: response.body,
       bodyLength: response.body?.length
     })
 
