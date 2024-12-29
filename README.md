@@ -29,6 +29,235 @@ This project demonstrates how to deploy a Next.js application using AWS Lambda f
 - AWS CDK v2
 - TypeScript
 
+### Installing AWS CLI
+
+#### On macOS
+
+```bash
+# Install using Homebrew
+brew install awscli
+
+# Verify installation
+aws --version
+```
+
+#### On Linux
+
+```bash
+# Download AWS CLI
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+# Verify installation
+aws --version
+```
+
+#### On Windows
+
+1. Download the AWS CLI MSI installer for Windows (64-bit):
+   <https://awscli.amazonaws.com/AWSCLIV2.msi>
+2. Run the downloaded MSI installer
+3. Verify installation:
+
+```bash
+aws --version
+```
+
+### AWS Credential Setup (via AWS Console)
+
+1. Create an IAM User:
+   - Go to AWS Console → IAM → Users → Add user
+   - Username: `cdk-deployer` (or your preferred name)
+   - Access type: Programmatic access
+   - Click "Next: Permissions"
+
+2. Create an IAM Group (recommended):
+   - Click "Create group"
+   - Group name: `cdk-deployers`
+   - Attach these managed policies:
+     - `AWSCloudFormationFullAccess`
+     - `IAMFullAccess`
+     - `AmazonS3FullAccess`
+     - `AWSLambda_FullAccess`
+     - `AmazonAPIGatewayAdministrator`
+   - Add your user to this group
+   - Click through to "Create user"
+
+3. Save Credentials:
+   - Download the CSV file with credentials
+   - Note your Access key ID and Secret access key
+   - Keep these secure and never commit them to git
+
+4. Configure AWS CLI:
+
+```bash
+aws configure
+
+AWS Access Key ID [None]: YOUR_ACCESS_KEY
+AWS Secret Access Key [None]: YOUR_SECRET_KEY
+Default region name [None]: ap-southeast-2
+Default output format [None]: json
+```
+
+5. Verify Configuration:
+
+```bash
+aws sts get-caller-identity
+```
+
+### AWS Credential Setup via CLI
+
+1. Create IAM Group:
+
+```bash
+aws iam create-group --group-name cdk-deployers
+```
+
+2. Attach Required Policies (via CLI iam-policy command):
+
+```bash
+aws iam attach-group-policy --group-name cdk-deployers --policy-arn arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
+aws iam attach-group-policy --group-name cdk-deployers --policy-arn arn:aws:iam::aws:policy/IAMFullAccess
+aws iam attach-group-policy --group-name cdk-deployers --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
+aws iam attach-group-policy --group-name cdk-deployers --policy-arn arn:aws:iam::aws:policy/AWSLambda_FullAccess
+aws iam attach-group-policy --group-name cdk-deployers --policy-arn arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator
+```
+
+3. Create and Attach Inline Policy:
+
+Create a file named `cdk-policy.json`:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:*",
+                "s3:*",
+                "iam:*",
+                "lambda:*",
+                "apigateway:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "sts:AssumeRole"
+            ],
+            "Resource": [
+                "arn:aws:iam::*:role/cdk-*"
+            ]
+        }
+    ]
+}
+```
+
+Create and attach the policy:
+
+```bash
+aws iam create-policy \
+    --policy-name CDKDeploymentPolicy \
+    --policy-document file://cdk-policy.json
+
+aws iam attach-group-policy \
+    --group-name cdk-deployers \
+    --policy-arn arn:aws:iam::YOUR_ACCOUNT_ID:policy/CDKDeploymentPolicy
+```
+
+4. Create IAM User:
+
+```bash
+aws iam create-user --user-name cdk-deployer
+```
+
+5. Add User to Group:
+
+```bash
+aws iam add-user-to-group --user-name cdk-deployer --group-name cdk-deployers
+```
+
+6. Create Access Key:
+
+```bash
+aws iam create-access-key --user-name cdk-deployer
+```
+
+7. Configure AWS CLI with the new credentials:
+
+```bash
+aws configure
+
+AWS Access Key ID [None]: YOUR_NEW_ACCESS_KEY
+AWS Secret Access Key [None]: YOUR_NEW_SECRET_KEY
+Default region name [None]: ap-southeast-2
+Default output format [None]: json
+```
+
+8. Verify Setup:
+
+```bash
+aws sts get-caller-identity
+```
+
+### Installing AWS CDK and Bootstraping
+
+1. Install Node.js (if not already installed):
+   - Download from: <https://nodejs.org/>
+   - Recommended version: 18.12.0 or later
+
+2. Verify Node.js installation:
+
+```bash
+node --version
+npm --version
+```
+
+3. Install AWS CDK globally:
+
+```bash
+npm install -g aws-cdk
+```
+
+4. Verify CDK installation:
+
+```bash
+cdk --version
+```
+
+5. Install TypeScript globally:
+
+```bash
+npm install -g typescript
+```
+
+6. Verify TypeScript installation:
+
+```bash
+tsc --version
+```
+
+7. Initialize project dependencies:
+
+```bash
+npm install
+```
+
+8. Bootstrap CDK:
+
+```bash
+cdk bootstrap aws://YOUR_ACCOUNT_ID/YOUR_REGION
+```
+
+Replace:
+
+- `YOUR_USERNAME` with your IAM username
+- `YOUR_ACCOUNT_ID` with your AWS account ID
+- `YOUR_REGION` with your target region (e.g., ap-southeast-2)
+
 ## Local Development
 
 To run the Next.js application locally:
@@ -41,33 +270,46 @@ npm run dev
 
 The application will be available at <http://localhost:3000>
 
-## Deployment
+## AWS Deployment
 
-### 1. Build the Next.js application
+### Build and Deploy Via Script
 
-```bash
-cd frontend
-npm run build
-```
-
-### 2. Package for Lambda
-
-```bash
-./prepare-lambda.sh
-```
-
-### 3. Deploy to AWS
+The project includes a deployment script that handles building, packaging, and deploying:
 
 ```bash
 ./deploy.sh
 ```
 
-This will:
+This script will:
 
-1. Create an S3 bucket for static assets
-2. Deploy the Next.js static files to S3
-3. Create a Lambda function for server-side rendering
-4. Set up API Gateway for routing
+1. Install CDK dependencies
+2. Build the Next.js application
+3. Package for Lambda deployment
+4. Deploy to AWS using CDK
+
+### Manual Deployment Steps
+
+If you prefer to deploy manually:
+
+1. Build the Next.js application:
+
+```bash
+cd frontend
+npm run build
+cd ..
+```
+
+2. Package for Lambda:
+
+```bash
+./prepare-lambda.sh
+```
+
+3. Deploy to AWS:
+
+```bash
+cdk deploy
+```
 
 ## Architecture Benefits
 
@@ -89,118 +331,6 @@ This will:
 - Automatic scaling with Lambda
 - S3 handles high traffic for static assets
 - No server management required
-
-## AWS Profile Setup
-
-### 1. Install AWS CLI
-
-First, ensure AWS CLI is installed:
-
-```bash
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-```
-
-### 2. Configure AWS Credentials
-
-Set up your AWS credentials:
-
-```bash
-aws configure
-```
-
-### 3. Required IAM Permissions
-
-Ensure your AWS user has these permissions:
-
-#### Core Permissions
-
-- `AmazonCloudFrontFullAccess`
-- `AmazonCloudFrontReadOnlyAccess`
-- `AmazonCloudWatchFullAccess`
-- `AmazonCloudWatchReadOnlyAccess`
-- `AmazonS3FullAccess`
-- `AmazonS3ReadOnlyAccess`
-- `AmazonS3ObjectLambdaFullAccess`
-- `AmazonS3ObjectLambdaReadOnlyAccess`
-
-#### Minimum IAM Policies
-
-- `AWSCloudFormationFullAccess`
-- `IAMFullAccess`
-- `AWSLambda_FullAccess`
-- `AmazonAPIGatewayAdministrator`
-- `AmazonS3FullAccess`
-
-### 4. Multiple Profiles (Optional)
-
-If you need multiple AWS profiles:
-
-```bash
-aws configure --profile profile-name
-```
-
-### 5. Profile Configuration File
-
-Your AWS credentials are stored in:
-
-```bash
-~/.aws/credentials
-```
-
-### 6. Security Best Practices
-
-1. **Access Key Rotation**
-   - Rotate access keys every 90 days
-   - Never commit credentials to version control
-   - Use AWS Secrets Manager for sensitive data
-
-2. **Principle of Least Privilege**
-   - Start with minimum permissions
-   - Add permissions as needed
-   - Regularly review and remove unused permissions
-
-3. **MFA Protection**
-   - Enable MFA for your AWS account
-   - Use MFA for sensitive operations
-
-   ```bash
-   # Using MFA token
-   aws sts get-session-token --serial-number arn:aws:iam::ACCOUNT-ID:mfa/user --token-code CODE
-   ```
-
-### 7. Troubleshooting
-
-1. **Invalid Credentials**
-
-   ```bash
-   aws configure list
-   aws sts get-caller-identity
-   ```
-
-2. **Permission Issues**
-
-   ```bash
-   # Check current permissions
-   aws iam get-user
-   aws iam list-attached-user-policies --user-name YOUR_USERNAME
-   ```
-
-3. **Region Issues**
-
-   ```bash
-   # Set default region
-   aws configure set region ap-southeast-2
-   ```
-
-### 8. Clean Up
-
-To remove AWS credentials:
-
-```bash
-rm -rf ~/.aws
-```
 
 ## Author
 
