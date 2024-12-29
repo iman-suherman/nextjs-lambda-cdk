@@ -80,6 +80,7 @@ const Home: FC<HomeProps> = ({ buildTime }) => {
       <Head>
         <title>Serverless Next.js on AWS Lambda + S3</title>
         <meta name="description" content="Next.js application with Lambda SSR and S3 static assets" />
+        <link rel="icon" href="/_next/static/favicon.ico" />
       </Head>
 
       <div className="min-h-screen bg-gray-900 text-white">

@@ -29,11 +29,19 @@ export class NextjsLambdaCdkStack extends cdk.Stack {
       ],
     });
 
-    // Deploy _next directory to S3
+    // Deploy Next.js static files to S3
     new s3deploy.BucketDeployment(this, 'StaticDeployment', {
       sources: [s3deploy.Source.asset(path.join(__dirname, '../.lambda-package/.next'))],
       destinationBucket: staticBucket,
       destinationKeyPrefix: '_next',
+    });
+
+    // Deploy favicon.ico to S3
+    new s3deploy.BucketDeployment(this, 'FaviconDeployment', {
+      sources: [s3deploy.Source.asset(path.join(__dirname, '../frontend/public'))],
+      destinationBucket: staticBucket,
+      destinationKeyPrefix: '_next/static',
+      include: ['favicon.ico'],
     });
 
     // Create Lambda Function
